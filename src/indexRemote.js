@@ -1,6 +1,9 @@
-//deno-lint-ignore-file no-async-promise-executor
+// Import necessary modules
 import { Console } from '@fadroma/namada'
 import { NODE_CONTROL_URL, PROXY_CONTROL_URL } from './config.js'
+// Import ws WebSocket library for Node.js
+import WebSocket from 'ws';
+
 const console = new Console('')
 
 /** Remote control for node and node-out proxy. */
@@ -11,11 +14,11 @@ export class RemoteControl {
     nodeApi  = NODE_CONTROL_URL,
   } = {}) {
     this.proxyApi = proxyApi
-    const proxyWs = Object.assign(new URL(proxyApi), { protocol: 'ws:' }).href
+    const proxyWs = Object.assign(new URL(proxyApi), { protocol: 'wss:' }).href
     this.proxyWs  = new ReconnectingWebSocket(proxyWs)
 
     this.nodeApi = nodeApi
-    const nodeWs = Object.assign(new URL(nodeApi), { protocol: 'ws:' }).href
+    const nodeWs = Object.assign(new URL(nodeApi), { protocol: 'wss:' }).href
     this.nodeWs  = new ReconnectingWebSocket(nodeWs)
 
     this.chain = chain
@@ -26,7 +29,7 @@ export class RemoteControl {
   async isPaused () {
     const response = await fetch(this.proxyApi)
     const json = await response.json()
-    console.log('isPaused response:', json)
+    // console.log('isPaused response:', json)
     const status = json.canConnect
     return !status
   }
@@ -52,8 +55,9 @@ export class ReconnectingWebSocket {
     return this.socket = new Promise(async (resolve, reject) => {
       if (backoff > 0) {
         console.log('Waiting for', backoff, 'msec before connecting to socket...')
-        await new Promise(resolve=>setTimeout(resolve, backoff))
+        await new Promise(resolve => setTimeout(resolve, backoff))
       }
+
       try {
         console.log('Connecting to', this.url)
         const socket = new WebSocket(this.url)
@@ -62,21 +66,19 @@ export class ReconnectingWebSocket {
           console.error(`🔴 Error connecting to ${this.url}:`, error)
           reject(error)
         }
-        socket.addEventListener('error', onConnectError)
 
-        socket.addEventListener('open', () => {
-          socket.removeEventListener('error', onConnectError)
+        socket.on('open', () => {
           console.log('Connected to', this.url)
           backoff = 0
           resolve(socket)
         })
 
-        socket.addEventListener('close', () => {
+        socket.on('error', onConnectError)
+
+        socket.on('close', () => {
           console.log('Disconnected from', this.url, 'reconnecting...')
           this.socket = this.connect(backoff + 250)
         })
-
-        //socket.addEventListener('message', message => {})
 
       } catch (e) {
         console.error(e)
@@ -86,4 +88,3 @@ export class ReconnectingWebSocket {
     })
   }
 }
-

@@ -1,44 +1,38 @@
-#!/usr/bin/env -S docker compose -f
 services:
   api:
-    network_mode: host
+    networks:
+      - app-network
     restart: unless-stopped
     image: ghcr.io/hackbg/undexer:v4
-    build: { context: ., network: host }
+    build: { context: . }
     entrypoint: /app/undexer
     command: api
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -O- localhost:8888/v2/status"]
-      interval: 1s
-      timeout: 5s
-      retries: 5
-  # Indexer stores data from remote chain into local database.
+    environment:
+      DATABASE_URL: postgresql://postgres:insecure@postgres:5432/postgres
+
   indexer:
-    network_mode: host
+    networks:
+      - app-network
     restart: unless-stopped
     image: ghcr.io/hackbg/undexer:v4
-    build: { context: ., network: host }
+    build: { context: . }
     entrypoint: /app/undexer
     command: index
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep undexer"]
-      interval: 1s
-      timeout: 5s
-      retries: 5
-  # Local database.
-  # Use `just psql` to get a shell.
+    environment:
+      DATABASE_URL: postgresql://postgres:insecure@postgres:5432/postgres
+
   postgres:
-    network_mode: host
+    networks:
+      - app-network
     restart: unless-stopped
     image: postgres:16.2-alpine
     ports: [ "5432:5432" ]
-    volumes: [ "database:/var/lib/postgresql/data" ]
     environment:
       - POSTGRES_PASSWORD=insecure
       - POSTGRES_USER=postgres
@@ -48,15 +42,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  # Optional DB admin.
-  #pgadmin:
-    #network_mode: host
-    #image: dpage/pgadmin4
-    #ports:
-      #- 5050:80
-    #environment:
-      #- PGADMIN_DEFAULT_EMAIL=admin@admin.com
-      #- PGADMIN_DEFAULT_PASSWORD=password
-      #- PGADMIN_LISTEN_ADDRESS=0.0.0.0
+
+networks:
+  app-network:
 volumes:
   database:

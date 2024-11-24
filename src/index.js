@@ -36,18 +36,27 @@ export class Indexer {
 
 /** Indexes per-block data. */
 export class BlockIndexer extends BlockCounter {
-  constructor (updater, ...rest) {
+  constructor(updater, ...rest) {
     super(...rest)
     this.updater = updater
   }
-  run () {
+
+  run() {
     return runForever(1000, () => this.update())
   }
-  async update () {
+
+  async update() {
     await super.update()
     while (this.inDB < this.onChain) {
-      const height = this.inDB + 1n
-      await retryForever(1000, () => this.updater.updateBlock({ height }))
+      const startHeight = this.inDB + 1n
+      const endHeight = startHeight + BigInt(5) - 1n
+
+      const updatePromises = []
+      for (let height = startHeight; height <= endHeight && height <= this.onChain; height++) {
+        updatePromises.push(retryForever(1000, () => this.updater.updateBlock({ height })))
+      }
+
+      await Promise.all(updatePromises)
       await super.update()
     }
   }
